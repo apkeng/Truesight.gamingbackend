@@ -1,4 +1,4 @@
-const apiEndpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-3.1-pro-preview:generateContent";
+const apiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent";
 
 /**
  * Helper to get API Key
