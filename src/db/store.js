@@ -96,8 +96,11 @@ const mergeData = (existing = {}, updates = {}) => {
 let pgPool = null;
 
 const getPgPool = () => {
-  if (!pgPool && process.env.DATABASE_URL) {
-    pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const url = process.env.DATABASE_URL;
+  // Ignore the unfilled template value; transactions then fall back to plain
+  // sequential Supabase writes instead of failing on a bad password.
+  if (!pgPool && url && !url.includes('YOUR_DB_PASSWORD')) {
+    pgPool = new Pool({ connectionString: url });
   }
   return pgPool;
 };

@@ -22,6 +22,7 @@ const challengesRoutes = require('./routes/challenges');
 const dailyQuestionsRoutes = require('./routes/dailyQuestions');
 const syllabusRoutes = require('./routes/syllabus');
 const eventsRoutes = require('./routes/events');
+const gamingRoutes = require('./routes/gaming');
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -81,18 +82,25 @@ const corsOptions = {
     
     // Normalize origin (remove trailing slash)
     const normalizedOrigin = origin.replace(/\/$/, '');
-    
-    // Check if origin is allowed (exact match or normalized match)
-    const isAllowed = allowedOrigins.length === 0 || 
-                     allowedOrigins.includes(origin) || 
-                     allowedOrigins.includes(normalizedOrigin) ||
-                     allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
-    
+
+    // Entries may contain "*" wildcards, e.g. https://truesight-gaming-*.vercel.app
+    // for Vercel preview deployments.
+    const matches = (allowed) => {
+      const a = allowed.replace(/\/$/, '');
+      if (!a.includes('*')) return a === normalizedOrigin;
+      const re = new RegExp('^' + a.split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*') + '$');
+      return re.test(normalizedOrigin);
+    };
+
+    const isAllowed = allowedOrigins.length === 0 || allowedOrigins.some(matches);
+
     if (isAllowed) {
       callback(null, true);
     } else {
+      // Reject without throwing: throwing turns every blocked preflight into a
+      // 500 with no CORS headers, which the browser reports as a network error.
       console.warn(`CORS blocked origin: ${origin}. Allowed origins:`, allowedOrigins);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true,
@@ -128,6 +136,7 @@ app.use('/api/challenges', challengesRoutes);
 app.use('/api/daily-questions', dailyQuestionsRoutes);
 app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/events', eventsRoutes);
+app.use('/api/gaming', gamingRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -140,25 +149,31 @@ app.use((req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`Backend server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start a listener only when run directly (`npm start` / `npm run dev`).
+// On Vercel the app is imported as a serverless handler and must not listen.
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`Backend server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
 
-// Handle port conflicts gracefully
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n❌ Port ${PORT} is already in use!`);
-    console.log(`\nTo fix this, run one of the following:`);
-    console.log(`1. Kill the process: lsof -ti:${PORT} | xargs kill -9`);
-    console.log(`2. Use the helper script: ./kill-port.sh`);
-    console.log(`3. Change the port in .env: PORT=5001\n`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
+  // Handle port conflicts gracefully
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`
+❌ Port ${PORT} is already in use!`);
+      console.log(`
+To fix this, run one of the following:`);
+      console.log(`1. Kill the process: lsof -ti:${PORT} | xargs kill -9`);
+      console.log(`2. Use the helper script: ./kill-port.sh`);
+      console.log(`3. Change the port in .env: PORT=5001
+`);
+      process.exit(1);
+    } else {
+      throw err;
+    }
+  });
+}
 
 module.exports = app;
 
